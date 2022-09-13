@@ -1,0 +1,327 @@
+/****** Script for SelectTopNRows command from SSMS  ******/
+SELECT TOP (1000) [UniqueID ]
+      ,[ParcelID]
+      ,[LandUse]
+      ,[PropertyAddress]
+      ,[SaleDate]
+      ,[SalePrice]
+      ,[LegalReference]
+      ,[SoldAsVacant]
+      ,[OwnerName]
+      ,[OwnerAddress]
+      ,[Acreage]
+      ,[TaxDistrict]
+      ,[LandValue]
+      ,[BuildingValue]
+      ,[TotalValue]
+      ,[YearBuilt]
+      ,[Bedrooms]
+      ,[FullBath]
+      ,[HalfBath]
+  FROM [NashHousing].[dbo].[NashvilleHousing]
+
+
+/*
+CLEANING DATA IN SQL QUERIES
+*/
+
+Select *
+from NashHousing.dbo.NashvilleHousing as NH
+
+-- (o) STANDARDIZE DATE FORMAT
+--     First Convert to standard date format
+Select SaleDate, CONVERT(Date, SaleDate)
+from NashHousing.dbo.NashvilleHousing as NH
+
+--     Update: means to replace the old format with the new format
+Update NashHousing.dbo.NashvilleHousing
+SET SaleDate = Convert(Date,SaleDate)
+
+--     test if the update worked
+Alter table NashHousing.dbo.NashvilleHousing
+add SaleDateConverted Date
+
+Update NashHousing.dbo.NashvilleHousing
+SET SaleDateConverted = Convert(Date,SaleDate)
+
+--     in case you need to delete a column (by mistake)
+Alter table NashHousing.dbo.NashvilleHousing drop column SakeDateConverted;
+Go
+
+-- (i) POPULATE PROPERTY ADDRESS DATA
+--     Check if there are Null values
+select PropertyAddress
+from NashHousing.dbo.NashVilleHousing
+Where PropertyAddress is Null
+
+--     Understand why there are null values
+select *
+from NashHousing.dbo.NashVilleHousing
+Where PropertyAddress is Null
+
+select *
+from NashHousing.dbo.NashVilleHousing
+Where PropertyAddress is Null
+order by ParcelID
+
+select *
+from NashHousing.dbo.NashVilleHousing
+--Where PropertyAddress is Null
+Where ParcelID = '025 07 0 031.00'
+--order by ParcelID
+
+select *
+from NashHousing.dbo.NashVilleHousing
+--Where PropertyAddress is Null
+Where ParcelID = '026 01 0 069.00'
+--order by ParcelID
+
+-- (ii) There Parcel IDs with the right Property Address, so we need to find out how to populate
+--       PropertyAddress using ParcelID as reference point
+
+Alter table NashHousing.dbo.NashvilleHousing
+add CountParcelID Numeric
+
+Alter Table NashHousing.dbo.NashvilleHousing
+Drop column CountParcelID;
+Go
+
+--       Duplicates are detected and counted
+select ParcelID, Count(ParcelID) as CountParcelID
+from NashHousing.dbo.NashVilleHousing
+Group By ParcelID
+Having count(ParcelID) >1
+Order by CountParcelID DESC
+
+
+ --      Another way to detect duplicates is through Inner Join
+ --      In this case the Join selects the common values using Parcel ID
+ --      and find the duplicates using UniqueID when it is different    
+Select *
+from NashHousing.dbo.NashVilleHousing a
+Join NashHousing.dbo.NashVilleHousing b
+on a.ParcelID = b.ParcelID
+And a.[UniqueID] <> b.[UniqueID]
+
+--      Now let us separate the ParcelIDs that have NULLs. The Join should show us the right Property Address
+Select a.ParcelID, a.PropertyAddress, b.ParcelID, b.PropertyAddress
+from NashHousing.dbo.NashVilleHousing a
+Join NashHousing.dbo.NashVilleHousing b
+on a.ParcelID = b.ParcelID
+And a.[UniqueID] <> b.[UniqueID]
+where a.PropertyAddress is Null
+
+--      Now let us populate the Null Property Address using ISNULL
+--      ISNULL (a,b): Takes all the Nulls of 'a' and populates those with the values from column 'b' 
+Select a.ParcelID, a.PropertyAddress, b.ParcelID, b.PropertyAddress, 
+ISNULL(a.PropertyAddress,b.PropertyAddress) as RightPropertyAddress
+from NashHousing.dbo.NashVilleHousing a
+Join NashHousing.dbo.NashVilleHousing b
+on a.ParcelID = b.ParcelID
+And a.[UniqueID] <> b.[UniqueID]
+where a.PropertyAddress is Null
+
+update a
+Set PropertyAddress = ISNULL(a.PropertyAddress,b.PropertyAddress)
+from NashHousing.dbo.NashVilleHousing a
+Join NashHousing.dbo.NashVilleHousing b
+   on a.ParcelID = b.ParcelID
+   And a.[UniqueID] <> b.[UniqueID]
+Where a.PropertyAddress is Null
+
+--      There are no Nulls now you may double check it using this Query
+Select a.ParcelID, a.PropertyAddress, b.ParcelID, b.PropertyAddress
+from NashHousing.dbo.NashVilleHousing a
+Join NashHousing.dbo.NashVilleHousing b
+on a.ParcelID = b.ParcelID
+And a.[UniqueID] <> b.[UniqueID]
+where a.PropertyAddress is Null
+
+
+--(iii) Breaking out Address into Individual Columns (Address, City, State)
+Select PropertyAddress
+from NashHousing.dbo.NashVilleHousing
+
+--     Separate the City Name
+Select 
+Substring(PropertyAddress,1,Charindex(',', PropertyAddress)) as Address
+From NashHousing.dbo.NashVilleHousing
+
+--     Find out in which position is the comma (,) located. It is in different position depending on the address
+Select 
+Substring(PropertyAddress,1,Charindex(',', PropertyAddress)) as Address,
+Charindex(',', PropertyAddress) as CommaPosition
+From NashHousing.dbo.NashVilleHousing
+
+--     Take the comma (,) away
+Select 
+Substring(PropertyAddress,1,Charindex(',', PropertyAddress)-1) as Address
+From NashHousing.dbo.NashVilleHousing
+
+--     Place the City name into another column
+Select 
+Substring(PropertyAddress,1,Charindex(',', PropertyAddress)-1) as Address
+, Substring(PropertyAddress,Charindex(',', PropertyAddress)+1, LEN(PropertyAddress)) as City
+From NashHousing.dbo.NashVilleHousing
+
+--     Place the City name into another column
+Select 
+Substring(PropertyAddress,1,Charindex(',', PropertyAddress)-1) as Address
+, Substring(PropertyAddress,Charindex(',', PropertyAddress)+1, LEN(PropertyAddress)) as City
+From NashHousing.dbo.NashVilleHousing
+
+--     Populating the DB with two new columns PrepertySplitAddress and PrpertySplitCity
+Alter table NashHousing.dbo.NashvilleHousing
+add PropertySplitAddress Nvarchar(225);
+
+Update NashHousing.dbo.NashvilleHousing
+SET PropertySplitAddress = Substring(PropertyAddress,1,Charindex(',', PropertyAddress)-1)
+
+Alter table NashHousing.dbo.NashvilleHousing
+add PropertySplitCity Nvarchar(225);
+
+Update NashHousing.dbo.NashvilleHousing
+SET PropertySplitCity = Substring(PropertyAddress,Charindex(',', PropertyAddress)+1, LEN(PropertyAddress)) 
+
+
+-- (iv) Looking at OwnerName
+Select OwnerName
+From NashHousing.dbo.NashvilleHousing
+
+--    Counting the Not Null OwnerNames 
+Select count(OwnerName) 
+From NashHousing.dbo.NashvilleHousing
+
+--    Counting the Null OwnerNames
+Select Sum(Case when  OwnerName is null then 1 Else 0 end)
+From NashHousing.dbo.NashvilleHousing
+
+--    Counting all the OwnerNames that should be registered (No Nulls + Nulls)
+Select Sum(Case when  OwnerName is null then 1 Else 1 end)
+From NashHousing.dbo.NashvilleHousing
+
+
+-- (v) Looking and Splitting OwnerAddress
+Select OwnerAddress
+From NashHousing.dbo.Nashvillehousing
+
+Select
+PARSENAME(REPLACE(OWNerAddress,',','.'),3),
+PARSENAME(REPLACE(OWNerAddress,',','.'),2),
+PARSENAME(REPLACE(OWNerAddress,',','.'),1)
+From NashHousing.dbo.Nashvillehousing
+
+--   Let us add these three Columns to the DB
+
+Alter table NashHousing.dbo.NashvilleHousing
+add OwnerAddressSplitNumNeig Nvarchar(225);
+
+Update NashHousing.dbo.NashvilleHousing
+SET OwnerAddressSplitNumNeig = PARSENAME(REPLACE(OWNerAddress,',','.'),3)
+
+Alter table NashHousing.dbo.NashvilleHousing
+add OwnerAddressSplitCity Nvarchar(225);
+
+Update NashHousing.dbo.NashvilleHousing
+SET OwnerAddressSplitCity = PARSENAME(REPLACE(OWNerAddress,',','.'),2)
+
+Alter table NashHousing.dbo.NashvilleHousing
+add OwnerAddressSplitState Nvarchar(225);
+
+Update NashHousing.dbo.NashvilleHousing
+SET OwnerAddressSplitState = PARSENAME(REPLACE(OWNerAddress,',','.'),1)
+
+-- (vi) Change Y and N to Yes and No in "Sold as Vacant" Field
+Select SoldAsVacant
+From NashHousing.dbo.NashvilleHousing
+
+Select SoldAsVacant, ParcelID
+From NashHousing.dbo.NashvilleHousing
+Where SoldAsVacant = 'Y'
+Order by ParcelID
+
+Select SoldAsVacant, ParcelID
+From NashHousing.dbo.NashvilleHousing
+Where SoldAsVacant = 'N'
+Order by ParcelID
+
+--    This next Query is really powerfull because it allows to check how many type of answers are there 
+--    and each of them how many times it is used.
+Select Distinct(SoldAsVacant), Count(SoldAsVacant)
+From NashHousing.dbo.NashvilleHousing
+Group by SoldAsVacant
+order by 2
+
+--    This next Query allows to Create a new column modifying the existing one
+
+Select SoldAsVacant
+, Case When SoldAsVacant = 'Y' Then 'Yes'
+       When SoldAsVacant = 'N' Then 'No'
+	   Else SoldAsVacant
+	   End
+From NashHousing.dbo.NashvilleHousing
+
+--    To update the DB use the next Query (using CASE from the previous Query)
+
+Update NashHousing.dbo.NashvilleHousing
+Set SoldAsVacant = 
+  Case When SoldAsVacant = 'Y' Then 'Yes'
+       When SoldAsVacant = 'N' Then 'No'
+	   Else SoldAsVacant
+	   End
+
+
+-- (vii) Remove Duplicates
+--       Find duplicates with CTE and Partition
+
+WITH RowNumCTE AS(
+Select *,
+      ROW_Number() Over(
+	  Partition by ParcelID,
+	               PropertyAddress,
+				   SalePrice,
+				   SaleDate,
+				   LegalReference
+				   ORDER BY
+				         UniqueID
+                         ) row_num
+
+From NashHousing.dbo.NashvilleHousing
+)
+
+Select *
+From RowNumCTE
+Where row_num > 1
+Order by PropertyAddress
+
+
+--     Delete duplicates
+WITH RowNumCTE AS(
+Select *,
+      ROW_Number() Over(
+	  Partition by ParcelID,
+	               PropertyAddress,
+				   SalePrice,
+				   SaleDate,
+				   LegalReference
+				   ORDER BY
+				         UniqueID
+                         ) row_num
+
+From NashHousing.dbo.NashvilleHousing
+)
+Delete
+From RowNumCTE
+Where row_num > 1
+
+
+-- (viii) Delete Unused Columns
+
+Alter Table NashHousing.dbo.NashvilleHousing
+Drop Column OwnerAddress, TaxDistrict, PropertyAddress
+
+Alter Table NashHousing.dbo.NashvilleHousing
+Drop Column SaleDate
+
+Select *
+From NashHousing.dbo.NashvilleHousing
